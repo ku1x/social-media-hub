@@ -19,6 +19,11 @@ const IG_SESSION = path.join(process.env.HOME || '/home/node', '.openclaw', 'dat
 const RN_DIR = path.join(process.env.HOME || '/home/node', '.openclaw', 'workspace', 'rednote-cli');
 const RN_UV = path.join(process.env.HOME || '/home/node', '.openclaw', 'tools', 'uv', 'uv');
 const RN_COOKIES = path.join(process.env.HOME || '/home/node', '.rednote-cli', 'cookies.json');
+const TT_DIR = path.join(process.env.HOME || '/home/node', '.openclaw/tools/TiktokAutoUploader');
+const TT_PYTHON = path.join(TT_DIR, '.venv/bin/python');
+const TT_CLI = path.join(TT_DIR, 'cli.py');
+const TT_VIDEO_DIR = path.join(TT_DIR, 'VideosDirPath');
+const TT_USER = 'acg_ai';
 
 async function getCDP() {
   const pages = await new Promise((resolve, reject) => {
@@ -221,12 +226,48 @@ except Exception as e:
   process.exit(r.success ? 0 : 1);
 }
 
+// ─── TikTok ───────────────────────────────────────────────────
+function ttPost(videoPath, title, schedule, visibility) {
+  if (!fs.existsSync(videoPath)) { console.log(`❌ File not found: ${videoPath}`); process.exit(1); }
+  if (!fs.existsSync(TT_CLI)) { console.log('❌ TiktokAutoUploader not found'); process.exit(1); }
+
+  // Copy video to TiktokAutoUploader's video dir
+  fs.mkdirSync(TT_VIDEO_DIR, { recursive: true });
+  const destPath = path.join(TT_VIDEO_DIR, path.basename(videoPath));
+  fs.copyFileSync(videoPath, destPath);
+
+  const ttArgs = [
+    TT_CLI, 'upload',
+    '-u', TT_USER,
+    '-v', destPath,
+    '-t', title,
+  ];
+  if (schedule > 0) ttArgs.push('-sc', String(schedule));
+  if (visibility !== undefined) ttArgs.push('-vi', String(visibility));
+
+  try {
+    const cmd = `"${TT_PYTHON}" ${ttArgs.map(a => `"${a}"`).join(' ')}`;
+    const output = execSync(cmd, { encoding: 'utf-8', timeout: 180000, stdio: ['pipe', 'pipe', 'pipe'] });
+    console.log(`✅ TikTok video posted! @${TT_USER}`);
+    if (output.trim()) console.log(`   ${output.trim().split('\n').pop()}`);
+  } catch (err) {
+    const stdout = err.stdout?.trim() || '';
+    if (stdout.includes('successfully') || stdout.includes('Uploaded')) {
+      console.log(`✅ TikTok video posted! @${TT_USER}`);
+    } else {
+      console.log(`❌ Failed: ${err.message}`);
+      if (stdout) console.log(`   stdout: ${stdout.substring(0, 200)}`);
+      process.exit(1);
+    }
+  }
+}
+
 // ─── CLI ──────────────────────────────────────────────────────
 function val(args, ...flags) { for (const f of flags) { const i=args.indexOf(f); if(i>=0&&i+1<args.length) return args[i+1]; } return null; }
 
 async function main() {
   const args = process.argv.slice(2);
-  if (!args.length) { console.log('Usage: social-post.js ig|rn <command> [options]'); process.exit(0); }
+  if (!args.length) { console.log('Usage: social-post.js ig|rn|tt <command> [options]'); process.exit(0); }
   const [platform, command] = args;
 
   if (platform === 'ig') {
@@ -270,7 +311,22 @@ async function main() {
     console.log('❌ Use: image, video'); process.exit(1);
   }
 
-  console.log('❌ Platform: ig or rn'); process.exit(1);
+  // ─── TikTok ───────────────────────────────────────────────
+  if (platform === 'tt' || platform === 'tiktok') {
+    if (command === 'video' || !command) {
+      const ci = args.indexOf(command || 'tt') + 1;
+      const file = args[ci];
+      const title = val(args, '--title', '-t') || '';
+      const schedule = parseInt(val(args, '--schedule', '-sc') || '0', 10);
+      const visibility = parseInt(val(args, '--visibility', '-vi') || '0', 10);
+      if (!file || !title) { console.log('❌ Need file and --title'); process.exit(1); }
+      ttPost(file, title, schedule, visibility);
+      return;
+    }
+    console.log('❌ Use: video (or just tt <file> --title "...")'); process.exit(1);
+  }
+
+  console.log('❌ Platform: ig, rn, or tt'); process.exit(1);
 }
 
 main().catch(err => { console.error(`❌ Error: ${err.message}`); process.exit(1); });
