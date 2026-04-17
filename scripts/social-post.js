@@ -246,7 +246,7 @@ function ttPost(videoPath, title, schedule, visibility) {
   if (visibility !== undefined) ttArgs.push('-vi', String(visibility));
 
   try {
-    const cmd = `"${TT_PYTHON}" ${ttArgs.map(a => `"${a}"`).join(' ')}`;
+    const cmd = `cd "${TT_DIR}" && "${TT_PYTHON}" ${ttArgs.map(a => `"${a}"`).join(' ')}`;
     const output = execSync(cmd, { encoding: 'utf-8', timeout: 180000, stdio: ['pipe', 'pipe', 'pipe'] });
     console.log(`✅ TikTok video posted! @${TT_USER}`);
     if (output.trim()) console.log(`   ${output.trim().split('\n').pop()}`);
