@@ -1,0 +1,12 @@
+# Sensitive data
+cookies/
+sessions/
+archive/
+node_modules/
+__pycache__/
+*.cookie
+*.session
+
+# Temp
+/tmp/
+*.log
